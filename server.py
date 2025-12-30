@@ -48,7 +48,7 @@ base_system_instruction = (
     "   - Use para criar `Script`, `LocalScript`, etc.\n"
     "   - O campo 'message' DEVE estar no idioma do usuario.\n\n"
     "# FORMATO DA SAIDA: Use este JSON OBRIGATORIAMENTE.\n"
-    '{ \n'
+    '{\n'
     '  "action": "chat" | "propose_command" | "propose_script", \n'
     '  "message": "Texto descritivo NO IDIOMA DO USUARIO.", \n'
     '  "code": "Codigo Lua..." \n'
@@ -80,4 +80,40 @@ def generate():
     try:
         data = request.get_json()
         if not data or 'prompt' not in data:
-            return jsonify({"error": "Invalid request. 'prompt' is required."
+            return jsonify({"error": "Invalid request. 'prompt' is required."}, 400)
+
+        user_prompt = data['prompt']
+        user_lang = data.get('language', 'pt-br')
+        selection = data.get('selection', 'Nenhuma seleção.')
+        map_context = data.get('map_context', 'Sem contexto de mapa.')
+        
+        prompt = (
+            f"DADOS DO USUARIO:\n"
+            f"- IDIOMA: {user_lang}\n"
+            f"- SELECAO ATUAL: {selection}\n"
+            f"- CONTEXTO DO MAPA: {map_context}\n"
+            f"-------------------------------------\n"
+            f"PEDIDO DO USUARIO: \"{user_prompt}\"\n"
+        )
+        
+        generation_config_override = genai_types.GenerationConfig(max_output_tokens=8192)
+
+        response = model.generate_content(prompt, generation_config=generation_config_override)
+        
+        raw_text = response.text
+        
+        if raw_text.strip().startswith("```json"):
+            raw_text = raw_text.strip()[7:-3].strip()
+
+        parsed_json = json.loads(raw_text)
+
+        return jsonify(parsed_json)
+
+    except json.JSONDecodeError:
+        return jsonify({"error": "AI generated invalid JSON.", "raw": raw_text}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
