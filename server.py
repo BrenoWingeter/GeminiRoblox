@@ -87,7 +87,7 @@ def agent_step():
         genai.configure(api_key=user_api_key)
         
         model = genai.GenerativeModel(
-            model_name="models/gemini-1.5-flash", 
+            model_name="models/gemini-2.0-flash-exp", 
             generation_config={"response_mime_type": "application/json"}, 
             system_instruction=base_system_instruction 
         )
