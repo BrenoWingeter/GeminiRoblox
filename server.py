@@ -99,8 +99,6 @@ def agent_step():
         )
  
         # LÓGICA DO INTERRUPTOR (TOGGLE)
-        # Se estiver ON, forçamos o estilo visual.
-        # Se estiver OFF, pedimos o estilo padrão.
         style_instruction = ""
         if use_context_for_models:
              style_instruction = (
@@ -119,7 +117,7 @@ def agent_step():
             f"IDIOMA DE RESPOSTA: {user_lang}.\n"
             f"NOME DO USUÁRIO: {user_name}.\n"
             f"CONTEXTO TEMÁTICO GERAL: {map_context}.\n"
-            f"{style_instruction}\n" # Injeta a lógica do interruptor aqui
+            f"{style_instruction}\n"
             f"---------------------------------------------------\n"
             f"OBJETOS EXISTENTES NO MAPA 3D: {data.get('map','')}\n"
             f"SELEÇÃO ATUAL: {data.get('selection','')}\n"
@@ -128,6 +126,24 @@ def agent_step():
         
         response = model.generate_content(full_prompt)
         text = response.text.replace("```json", "").replace("```", "").strip()
+
+        # --- CORREÇÃO DE UNICODE (SANITIZER) ---
+        # Substitui caracteres cirílicos comuns que parecem latinos e quebram o Lua
+        replacements = {
+            "\u0430": "a", "\u0410": "A", 
+            "\u0435": "e", "\u0415": "E", 
+            "\u043e": "o", "\u041e": "O", 
+            "\u0440": "p", "\u0420": "P", 
+            "\u0441": "c", "\u0421": "C", 
+            "\u0443": "y", "\u0423": "Y", 
+            "\u0445": "x", "\u0425": "X", 
+            "\u043a": "k", "\u041a": "K", # O "k" cirílico que estava causando o erro
+            "\u0456": "i", "\u0406": "I"
+        }
+        for cyr, lat in replacements.items():
+            text = text.replace(cyr, lat)
+        # ---------------------------------------
+        
         return jsonify(json.loads(text))
     
     except Exception as e:
