@@ -1,6 +1,3 @@
-------------------------------------------------------------
--- ARQUIVO: server.py
-------------------------------------------------------------
 import os
 from flask import Flask, request, jsonify
 import google.generativeai as genai
