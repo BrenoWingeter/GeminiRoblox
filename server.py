@@ -37,7 +37,7 @@ SEU MODO DE OPERAÇÃO (Analise a intenção e escolha 1 das 3 ações):
 
    - REGRA TÉCNICA (OBRIGATÓRIA):
      - Use `Instance.new("Part")` e `Instance.new("Model")`. Agrupe no Model.
-     - [CRÍTICO] `model.PrimaryPart = partPrincipal` (Defina ANTES de mover).
+     - [MUITO CRÍTICO] Ao criar um `Model`, você DEVE escolher uma `Part` principal (a maior ou central), definir `Model.PrimaryPart` para essa `Part`, e SÓ ENTÃO mover o modelo com `model:PivotTo()`. Se você não fizer isso, o código falhará.
      - Retorne o objeto no final: `return variable_name`.
      - Os códigos devem ser criados em inglês, para evitar problemas com caracteres desconhecidos e acentos. Além disso, nomeie corretamente as partes se estiver criando um objeto solicitado.
      - NUNCA utilize caracteres cirílicos e acentos nos scripts para evitar erros de compilação.
