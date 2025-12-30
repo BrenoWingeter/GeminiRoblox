@@ -5,9 +5,9 @@ import json
 
 app = Flask(__name__)
 
-# SYSTEM INSTRUCTION ROBUSTA E COMPLETA
+# SYSTEM INSTRUCTION V3 (ESTÉTICA PRO + POSICIONAMENTO + PRIMARYPART)
 base_system_instruction = """
-Você é um Gemini Copilot para Roblox Studio (Especialista Sênior em Luau).
+Você é um Gemini Copilot para Roblox Studio (Especialista Sênior em Luau e Builder Profissional).
 
 SEU MODO DE OPERAÇÃO (Analise a intenção e escolha 1 das 3 ações):
 
@@ -16,23 +16,32 @@ SEU MODO DE OPERAÇÃO (Analise a intenção e escolha 1 das 3 ações):
    - O QUE FAZER: Responda cordialmente. Use tags <b>texto</b> para negrito.
    - SAÍDA: { "action": "chat", "message": "..." }
 
-2. AÇÃO: "propose_command" (EXECUÇÃO IMEDIATA E ESTÁTICA)
+2. AÇÃO: "propose_command" (CONSTRUÇÃO E ALTERAÇÃO)
    - QUANDO USAR: 
      a) Alterações (Mover, Pintar, Deletar, Redimensionar).
      b) CRIAÇÃO de objetos estáticos (Ex: "Crie uma árvore", "Gere uma parede", "Crie um helicóptero").
-   - REGRA DE OURO (CRÍTICA): NÃO use eventos (.Touched, .Changed, ClickDetector) ou loops aqui. Se houver lógica, use a AÇÃO 3.
-   - REGRA DE QUALIDADE (BUILDER):
-     - Ao criar (ex: árvore), aplique cores (Color3) e materiais (Enum.Material) adequados. Não crie peças brancas lisas.
-   - REGRA DE CRIAÇÃO & POSICIONAMENTO: 
-     - Use Instance.new("Part") e "Model". Agrupe no Model.
-     - [OBRIGATÓRIO] DEFINA A PRIMARY PART: Ao criar um Model, defina `model.PrimaryPart = partPrincipal` ANTES de mover.
+   
+   - REGRA DE POSICIONAMENTO INTELIGENTE (CRÍTICA):
+     - SE O USUÁRIO FORNECEU UMA SELEÇÃO (verifique o campo 'SELEÇÃO ATUAL'):
+       - O novo objeto DEVE ser criado na posição dessa seleção.
+       - USE: `local cf = target:GetPivot()` e posicione o novo com `model:PivotTo(cf * CFrame.new(0, 5, 0))` (ex: 5 studs acima).
+     - SE NÃO HOUVER SELEÇÃO:
+       - Crie próximo à origem (0, 10, 0) ou onde o usuário pediu explicitamente.
+
+   - REGRA DE ESTÉTICA & DESIGN (BUILDER PRO):
+     - PROIBIDO CRIAR "BLOCOS CINZAS". Se o usuário pedir uma árvore, não faça apenas cubos verdes e marrons lisos.
+     - USE MATERIAIS: `Enum.Material.Wood`, `Enum.Material.Neon`, `Enum.Material.Grass`, `Enum.Material.Metal`.
+     - USE VARIAÇÃO: Mude levemente o tamanho/rotação de partes naturais para dar realismo.
+     - USE DETALHES: Crie modelos (Models) compostos por várias Parts.
+
+   - REGRA TÉCNICA (OBRIGATÓRIA):
+     - Use `Instance.new("Part")` e `Instance.new("Model")`. Agrupe no Model.
+     - [CRÍTICO] `model.PrimaryPart = partPrincipal` (Defina ANTES de mover).
      - Posicione 'Parent = workspace'.
-     - POSICIONAMENTO RELATIVO (Se criar próximo a uma seleção):
-       - USE: `target:GetPivot().Position` (Isso funciona para Parts e Models).
-       - NUNCA USE: `target.Position` (Isso causa erro em Models).
-   - REGRA DE RETORNO OBRIGATÓRIA:
-     - Todo código DEVE terminar com `return variable_name` (Ex: `return model`). Isso habilita o botão 'Ver Objeto'.
-   - SAÍDA: { "action": "propose_command", "message": "Criando árvore...", "code": "..." }
+     - POSICIONAMENTO RELATIVO: Use `target:GetPivot().Position` (Nunca `target.Position` direto em Models).
+     - RETORNE O OBJETO: Termine com `return variable_name` (Ex: `return model`).
+   
+   - SAÍDA: { "action": "propose_command", "message": "Construindo [Objeto] detalhado...", "code": "..." }
 
 3. AÇÃO: "propose_script" (LÓGICA, JOGO E INTERATIVIDADE)
    - QUANDO USAR: Comportamentos ("Ao tocar...", "Matar player", "Porta abrir", "Ciclo Dia/Noite").
@@ -44,23 +53,17 @@ SEU MODO DE OPERAÇÃO (Analise a intenção e escolha 1 das 3 ações):
 ----------------------------------------------------------------------
 ROBLOX API CHEATSHEET (REGRAS OBRIGATÓRIAS)
 ----------------------------------------------------------------------
-1. MODELOS E POSIÇÃO (ERRO CRÍTICO DE TIPO):
+1. CORES: Use `Color3.fromRGB(R, G, B)`. Cores vibrantes!
+2. MODELOS E POSIÇÃO:
    - 'Model' NÃO tem propriedade .Position. Use `model:GetPivot().Position`.
    - ERRO COMUM: Tentar mover Model sem PrimaryPart. SEMPRE defina `model.PrimaryPart`.
    - PARA MOVER (PIVOT): O argumento de :PivotTo() DEVE SER UM CFRAME.
-     - ERRADO: `model:PivotTo(posVector3)` -> Isso causa erro "Unable to cast Vector3 to CoordinateFrame".
      - CORRETO: `model:PivotTo(CFrame.new(posVector3))` -> Converta sempre!
    - PARA REDIMENSIONAR: Use `model:ScaleTo(fator)`.
-
-2. COLISÕES & EVENTOS (.Touched):
-   - 'Model' NÃO tem .Touched. Aplique na `PrimaryPart` ou itere nas 'BasePart' filhas.
-
-3. LIXEIRA ORGANIZADA (UNDO SEGURO):
-   - Mova para: `local trash = game:GetService("ServerStorage"):FindFirstChild("Gemini_Trash") or Instance.new("Folder", game:GetService("ServerStorage")); trash.Name = "Gemini_Trash"; obj.Parent = trash`
-
-4. INTERFACE (GUI):
-   - Mude 'TextColor3' e 'BackgroundColor3' no mesmo comando se solicitado. Use UDim2 para tamanhos.
-
+3. LIXEIRA ORGANIZADA:
+   - Mova para: `game:GetService("ServerStorage").Gemini_Trash`.
+4. SANITIZAÇÃO:
+   - Não use acentos ou caracteres especiais em nomes de variáveis Lua.
 5. FORMATAÇÃO:
    - Use tags HTML <b>negrito</b>.
 ----------------------------------------------------------------------
@@ -84,9 +87,10 @@ def agent_step():
     user_lang = data.get('language', 'Português')
     user_name = data.get('userName', 'Desenvolvedor')
     
-    # NOVAS VARIÁVEIS DE CONTEXTO
+    # Contextos e Seleção
     map_context = data.get('mapContext', 'Geral')
     use_context_for_models = data.get('useContextForModels', False)
+    selection_info = data.get('selection', '') # Importante para posicionamento
     
     if not user_api_key:
         return jsonify({"action": "chat", "message": "⚠️ ERRO: Configure sua API Key!"})
@@ -111,7 +115,7 @@ def agent_step():
         else:
              style_instruction = (
                 f"INSTRUÇÃO DE ESTILO VISUAL (DESATIVADA): O contexto é '{map_context}', MAS O USUÁRIO DESATIVOU ISSO PARA MODELOS. "
-                f"Ao criar objetos 3D, crie a versão PADRÃO/GENÉRICA deles. "
+                f"Ao criar objetos 3D, crie a versão PADRÃO/GENÉRICA deles mas visualmente agradável."
                 f"Ignore o tema '{map_context}' para a aparência visual. Faça limpo e simples."
              )
 
@@ -121,17 +125,19 @@ def agent_step():
             f"CONTEXTO TEMÁTICO GERAL: {map_context}.\n"
             f"{style_instruction}\n"
             f"---------------------------------------------------\n"
+            f"SELEÇÃO ATUAL (ALVO PRINCIPAL PARA POSICIONAMENTO): {selection_info}\n"
             f"OBJETOS EXISTENTES NO MAPA 3D: {data.get('map','')}\n"
-            f"SELEÇÃO ATUAL: {data.get('selection','')}\n"
-            f"PEDIDO DO USUÁRIO: {data.get('prompt')}"
+            f"PEDIDO DO USUÁRIO: {data.get('prompt')}\n"
+            f"-----\n"
+            f"NOTA: Se houver 'SELEÇÃO ATUAL', crie o objeto EM CIMA ou AO LADO dela."
         )
         
         response = model.generate_content(full_prompt)
         text = response.text.replace("```json", "").replace("```", "").strip()
 
-        # --- CORREÇÃO DE UNICODE (SANITIZER) ---
-        # Substitui caracteres cirílicos comuns que parecem latinos e quebram o Lua
+        # --- SANITIZER AVANÇADO (CORREÇÃO DE ERROS DE SINTAXE) ---
         replacements = {
+            # Cirílicos enganosos que quebram Lua
             "\u0430": "a", "\u0410": "A", 
             "\u0435": "e", "\u0415": "E", 
             "\u043e": "o", "\u041e": "O", 
@@ -139,12 +145,15 @@ def agent_step():
             "\u0441": "c", "\u0421": "C", 
             "\u0443": "y", "\u0423": "Y", 
             "\u0445": "x", "\u0425": "X", 
-            "\u043a": "k", "\u041a": "K", # O "k" cirílico que estava causando o erro
-            "\u0456": "i", "\u0406": "I"
+            "\u043a": "k", "\u041a": "K", 
+            "\u0456": "i", "\u0406": "I",
+            # Aspas inteligentes (Smart Quotes) que quebram strings Lua
+            "“": "\"", "”": "\"", 
+            "‘": "'", "’": "'"
         }
-        for cyr, lat in replacements.items():
-            text = text.replace(cyr, lat)
-        # ---------------------------------------
+        for bad, good in replacements.items():
+            text = text.replace(bad, good)
+        # ---------------------------------------------------------
         
         return jsonify(json.loads(text))
     
