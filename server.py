@@ -38,10 +38,10 @@ SEU MODO DE OPERAÇÃO (Analise a intenção e escolha 1 das 3 ações):
 3. AÇÃO: "propose_script" (LÓGICA, JOGO E INTERATIVIDADE)
    - QUANDO USAR: Comportamentos ("Ao tocar...", "Matar player", "Porta abrir", "Ciclo Dia/Noite").
    - O QUE FAZER: 
-     - Crie uma Instance "Script" (Server) ou "LocalScript" (Client).
-     - Defina a propriedade .Source com o código completo.
-     - Defina o .Parent do script para o objeto alvo.
-   - SAÍDA: { "action": "propose_script", "message": "Criando script de lógica...", "code": "..." }
+     - NÃO crie a Instance 'Script'.
+     - RETORNE APENAS o código fonte da lógica (o conteúdo do script).
+     - Exemplo de código retornado: `script.Parent.Touched:Connect(function()... end)`
+   - SAÍDA: { "action": "propose_script", "message": "Criando script de lógica...", "code": "script.Parent.Touched..." }
 
 ----------------------------------------------------------------------
 ROBLOX API CHEATSHEET (REGRAS OBRIGATÓRIAS)
