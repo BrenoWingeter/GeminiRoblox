@@ -86,9 +86,8 @@ def agent_step():
     try:
         genai.configure(api_key=user_api_key)
         
-        # Usa sua instrução SYSTEM existente (NÃO ALTEREI ELA)
         model = genai.GenerativeModel(
-            model_name="models/gemini-2.0-flash-exp", 
+            model_name="models/gemini-1.5-flash", 
             generation_config={"response_mime_type": "application/json"}, 
             system_instruction=base_system_instruction 
         )
@@ -98,44 +97,37 @@ def agent_step():
              style_instruction = f"ESTILO VISUAL: O contexto é '{map_context}'. Use materiais coerentes."
 
         full_prompt = (
-            f"USUÁRIO: {user_name} ({user_lang})\n"
-            f"{style_instruction}\n"
-            f"SELEÇÃO ATUAL: {selection_info}\n"
-            f"PEDIDO: {data.get('prompt')}\n"
+            f"INSTRUÇÃO CRÍTICA: Responda estritamente no idioma '{user_lang}'. Dirija-se ao usuário como '{user_name}'.\n"
             f"-----\n"
-            f"IMPORTANTE: RETORNE JSON VÁLIDO. NÃO USE CIRÍLICO."
+            f"{style_instruction}\n"
+            f"CONTEXTO DO JOGO: {map_context}\n"
+            f"SELEÇÃO ATUAL (OBJETO QUE O USUÁRIO CLICOU): {selection_info}\n"
+            f"-----\n"
+            f"PEDIDO DE '{user_name.upper()}': {data.get('prompt')}\n"
+            f"-----\n"
+            f"REGRAS DE CÓDIGO: O código Luau gerado NÃO PODE conter caracteres cirílicos, acentos ou quaisquer caracteres não-ASCII. Use apenas nomes de variáveis e strings em inglês puro."
         )
         
         response = model.generate_content(full_prompt)
         text = response.text.replace("```json", "").replace("```", "").strip()
 
-        # --- SANITIZER E CORRETOR JSON (AQUI ESTÁ A CORREÇÃO DO ERRO DA VÍRGULA) ---
-        replacements = {
-            "\u0430": "a", "\u0410": "A", "\u0435": "e", "\u0415": "E", "\u043e": "o", "\u041e": "O", 
-            "\u0440": "p", "\u0420": "P", "\u0441": "c", "\u0421": "C", "\u0443": "y", "\u0423": "Y", 
-            "\u0445": "x", "\u0425": "X", "\u043a": "k", "\u041a": "K", "\u0456": "i", "\u0406": "I",
-            "\u0432": "v", "\u0412": "V", "\u043d": "n", "\u041d": "N", "\u043c": "m", "\u041c": "M",
-            "\u0442": "t", "\u0422": "T", "\u043b": "l", "\u041b": "L",
-            "“": "\"", "”": "\"", "‘": "'", "’": "'"
-        }
-        for bad, good in replacements.items():
-            text = text.replace(bad, good)
-
-        # Tenta carregar. Se der erro, tenta limpar caracteres de controle invisíveis.
+        # Tenta decodificar o JSON e, se falhar, tenta limpar caracteres de controle
+        response_data = None
         try:
-            return jsonify(json.loads(text))
+            response_data = json.loads(text)
         except json.JSONDecodeError:
-            import re
-            # Remove caracteres de controle que quebram o JSON (exceto \n \r \t)
-            text_clean = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', text)
+            cleaned_text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', text)
             try:
-                return jsonify(json.loads(text_clean))
-            except:
-                # Retorna erro limpo em vez de quebrar
-                return jsonify({
-                    "action": "chat", 
-                    "message": f"⚠️ A IA gerou uma resposta inválida (Erro JSON). Tente de novo. \n\nRaw: {text[:50]}..."
-                })
+                response_data = json.loads(cleaned_text)
+            except Exception:
+                 return jsonify({"action": "chat", "message": f"⚠️ A IA gerou uma resposta inválida (JSON Error). Tente de novo. \n\nRaw: {text[:80]}..."})
+
+        # Sanitiza o campo 'code' para remover quaisquer caracteres não-ASCII que restaram
+        if response_data and "code" in response_data and isinstance(response_data["code"], str):
+            # Garante que o código seja puramente ASCII para evitar erros no Luau
+            response_data["code"] = response_data["code"].encode('ascii', 'ignore').decode('utf-8')
+
+        return jsonify(response_data)
     
     except Exception as e:
         return jsonify({"action": "chat", "message": f"Erro API: {str(e)}"})
