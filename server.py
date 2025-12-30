@@ -37,6 +37,8 @@ SEU MODO DE OPERAÇÃO (Analise a intenção e escolha 1 das 3 ações):
      - Use `Instance.new("Part")` e `Instance.new("Model")`. Agrupe no Model.
      - [CRÍTICO] `model.PrimaryPart = partPrincipal` (Defina ANTES de mover).
      - Retorne o objeto no final: `return variable_name`.
+     - Os códigos devem ser criados em inglês, para evitar problemas com caracteres desconhecidos e acentos. Além disso, nomeie corretamente as partes se estiver criando um objeto solicitado.
+     - NUNCA utilize caracteres cirílicos e acentos nos scripts para evitar erros de compilação.
    
    - SAÍDA: { "action": "propose_command", "message": "Criando Árvore próximo a <b>SpawnLocation</b>...", "code": "..." }
 
