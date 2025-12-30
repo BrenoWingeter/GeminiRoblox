@@ -5,6 +5,7 @@ import json
 
 app = Flask(__name__)
 
+# SYSTEM INSTRUCTION ROBUSTA E COMPLETA
 base_system_instruction = """
 Você é um Gemini Copilot para Roblox Studio (Especialista Sênior em Luau).
 
@@ -21,13 +22,15 @@ SEU MODO DE OPERAÇÃO (Analise a intenção e escolha 1 das 3 ações):
      b) CRIAÇÃO de objetos estáticos (Ex: "Crie uma árvore", "Gere uma parede").
    - REGRA DE OURO (CRÍTICA): NÃO use eventos (.Touched, .Changed, ClickDetector) ou loops aqui. Se houver lógica, use a AÇÃO 3.
    - REGRA DE QUALIDADE (BUILDER):
-     - Ao criar (ex: árvore), aplique cores (Color3) e materiais (Enum.Material) adequados ao contexto. Não crie peças brancas lisas.
+     - Ao criar (ex: árvore), aplique cores (Color3) e materiais (Enum.Material) adequados. Não crie peças brancas lisas.
    - REGRA DE CRIAÇÃO & POSICIONAMENTO: 
      - Use Instance.new("Part") e "Model". Agrupe no Model.
      - Posicione 'Parent = workspace'.
      - POSICIONAMENTO RELATIVO (Se criar próximo a uma seleção):
        - USE: `target:GetPivot().Position` (Isso funciona para Parts e Models).
        - NUNCA USE: `target.Position` (Isso causa erro em Models).
+   - REGRA DE RETORNO OBRIGATÓRIA:
+     - Todo código DEVE terminar com `return variable_name` (Ex: `return model`). Isso habilita o botão 'Ver Objeto'.
    - SAÍDA: { "action": "propose_command", "message": "Criando árvore...", "code": "..." }
 
 3. AÇÃO: "propose_script" (LÓGICA, JOGO E INTERATIVIDADE)
@@ -60,19 +63,6 @@ ROBLOX API CHEATSHEET (REGRAS OBRIGATÓRIAS)
    - Use tags HTML <b>negrito</b>.
 ----------------------------------------------------------------------
 
-REGRAS GERAIS DE CÓDIGO:
-- NÃO use markdown de código. Retorne apenas o texto cru.
-- Sempre retorne o objeto manipulado (return obj).
-
-CONTEXTO DE BUSCA:
-   local function getById(id)
-     for _, v in ipairs(workspace:GetDescendants()) do
-       if v:GetAttribute("_geminiID") == id then return v end
-     end
-     return nil
-   end
-   local target = getById("ID_DO_CONTEXTO") or workspace:FindFirstChild("NOME")
-
 SAÍDA JSON OBRIGATÓRIA:
 { 
   "action": "chat" | "propose_command" | "propose_script", 
@@ -91,7 +81,10 @@ def agent_step():
     user_api_key = data.get('apiKey')
     user_lang = data.get('language', 'Português')
     user_name = data.get('userName', 'Desenvolvedor')
+    
+    # NOVAS VARIÁVEIS DE CONTEXTO
     map_context = data.get('mapContext', 'Geral')
+    use_context_for_models = data.get('useContextForModels', False)
     
     if not user_api_key:
         return jsonify({"action": "chat", "message": "⚠️ ERRO: Configure sua API Key!"})
@@ -105,16 +98,28 @@ def agent_step():
             system_instruction=base_system_instruction
         )
  
-        # [CORREÇÃO CRÍTICA DE CONTEXTO]
-        # Injetamos uma regra de prioridade para que o Gênero (Terror) vença os Objetos Visuais (Árvore Fofa)
+        # LÓGICA DO INTERRUPTOR (TOGGLE)
+        # Se estiver ON, forçamos o estilo visual.
+        # Se estiver OFF, pedimos o estilo padrão.
+        style_instruction = ""
+        if use_context_for_models:
+             style_instruction = (
+                f"INSTRUÇÃO DE ESTILO VISUAL (ATIVADA): O contexto do jogo é '{map_context}'. "
+                f"Ao criar modelos 3D ou alterar cores, VOCÊ DEVE aplicar uma estética que combine com '{map_context}' (ex: cores, materiais). "
+                f"Se for Terror, faça algo sombrio. Se for Sci-Fi, use neon/metal."
+             )
+        else:
+             style_instruction = (
+                f"INSTRUÇÃO DE ESTILO VISUAL (DESATIVADA): O contexto é '{map_context}', MAS O USUÁRIO DESATIVOU ISSO PARA MODELOS. "
+                f"Ao criar objetos 3D, crie a versão PADRÃO/GENÉRICA deles. "
+                f"Ignore o tema '{map_context}' para a aparência visual. Faça limpo e simples."
+             )
+
         full_prompt = (
             f"IDIOMA DE RESPOSTA: {user_lang}.\n"
             f"NOME DO USUÁRIO: {user_name}.\n"
-            f"---------------------------------------------------\n"
-            f"CONTEXTO TEMÁTICO DO PROJETO (PRIORIDADE MÁXIMA): {map_context}.\n"
-            f"DIRETRIZ DE CRIATIVIDADE: Todas as suas ideias, nomes e criações DEVEM seguir estritamente o tema '{map_context}'.\n"
-            f"- Se o tema for 'Terror' e você ver 'Árvores Fofas' no mapa, ignore a fofura e trate-as como árvores mortas/assustadoras.\n"
-            f"- O tema '{map_context}' define a atmosfera. Os objetos abaixo são apenas recursos disponíveis.\n"
+            f"CONTEXTO TEMÁTICO GERAL: {map_context}.\n"
+            f"{style_instruction}\n" # Injeta a lógica do interruptor aqui
             f"---------------------------------------------------\n"
             f"OBJETOS EXISTENTES NO MAPA 3D: {data.get('map','')}\n"
             f"SELEÇÃO ATUAL: {data.get('selection','')}\n"
