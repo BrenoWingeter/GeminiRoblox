@@ -64,6 +64,10 @@ SAÍDA JSON OBRIGATÓRIA:
 }
 """
 
+@app.route('/connect', methods=['POST'])
+def connect_project():
+    return jsonify({"status": "OK"})
+
 @app.route('/agent', methods=['POST'])
 def agent_step():
     data = request.json
