@@ -2,6 +2,7 @@ import os
 from flask import Flask, request, jsonify
 import google.generativeai as genai
 import json
+import re
 
 app = Flask(__name__)
 
@@ -62,10 +63,6 @@ SAÍDA JSON OBRIGATÓRIA:
 }
 """
 
-@app.route('/connect', methods=['POST'])
-def connect_project():
-    return jsonify({"status": "OK"})
-
 @app.route('/agent', methods=['POST'])
 def agent_step():
     data = request.json
@@ -73,32 +70,27 @@ def agent_step():
     user_lang = data.get('language', 'Português')
     user_name = data.get('userName', 'Desenvolvedor')
     
-    # Contextos
+    # Seus contextos
     map_context = data.get('mapContext', 'Geral')
     use_context_for_models = data.get('useContextForModels', False)
     selection_info = data.get('selection', '') 
-    
+
     if not user_api_key:
         return jsonify({"action": "chat", "message": "⚠️ ERRO: Configure sua API Key!"})
 
     try:
         genai.configure(api_key=user_api_key)
         
+        # Usa sua instrução SYSTEM existente (NÃO ALTEREI ELA)
         model = genai.GenerativeModel(
             model_name="models/gemini-2.0-flash-exp", 
             generation_config={"response_mime_type": "application/json"}, 
-            system_instruction=base_system_instruction
+            system_instruction=base_system_instruction 
         )
  
-        style_instruction = ""
+        style_instruction = "ESTILO: Padrão Roblox detalhado."
         if use_context_for_models:
-             style_instruction = (
-                f"ESTILO VISUAL: O contexto é '{map_context}'. Use materiais/cores coerentes."
-             )
-        else:
-             style_instruction = (
-                f"ESTILO VISUAL: Padrão Roblox, mas bonito e detalhado."
-             )
+             style_instruction = f"ESTILO VISUAL: O contexto é '{map_context}'. Use materiais coerentes."
 
         full_prompt = (
             f"USUÁRIO: {user_name} ({user_lang})\n"
@@ -106,36 +98,39 @@ def agent_step():
             f"SELEÇÃO ATUAL: {selection_info}\n"
             f"PEDIDO: {data.get('prompt')}\n"
             f"-----\n"
-            f"IMPORTANTE: Verifique se existe SELEÇÃO ATUAL para definir a posição e a mensagem de feedback."
+            f"IMPORTANTE: RETORNE JSON VÁLIDO. NÃO USE CIRÍLICO."
         )
         
         response = model.generate_content(full_prompt)
         text = response.text.replace("```json", "").replace("```", "").strip()
 
-        # --- SANITIZER SUPER REFORÇADO ---
+        # --- SANITIZER E CORRETOR JSON (AQUI ESTÁ A CORREÇÃO DO ERRO DA VÍRGULA) ---
         replacements = {
-            # Cirílicos comuns e o 'v' (U+0432) que deu erro
-            "\u0430": "a", "\u0410": "A", 
-            "\u0435": "e", "\u0415": "E", 
-            "\u043e": "o", "\u041e": "O", 
-            "\u0440": "p", "\u0420": "P", 
-            "\u0441": "c", "\u0421": "C", 
-            "\u0443": "y", "\u0423": "Y", 
-            "\u0445": "x", "\u0425": "X", 
-            "\u043a": "k", "\u041a": "K", 
-            "\u0456": "i", "\u0406": "I",
-            "\u0432": "v", "\u0412": "V", # <--- O CULPADO DO SEU ERRO
-            "\u043d": "n", "\u041d": "N",
-            "\u043c": "m", "\u041c": "M",
-            # Aspas inteligentes
-            "“": "\"", "”": "\"", 
-            "‘": "'", "’": "'"
+            "\u0430": "a", "\u0410": "A", "\u0435": "e", "\u0415": "E", "\u043e": "o", "\u041e": "O", 
+            "\u0440": "p", "\u0420": "P", "\u0441": "c", "\u0421": "C", "\u0443": "y", "\u0423": "Y", 
+            "\u0445": "x", "\u0425": "X", "\u043a": "k", "\u041a": "K", "\u0456": "i", "\u0406": "I",
+            "\u0432": "v", "\u0412": "V", "\u043d": "n", "\u041d": "N", "\u043c": "m", "\u041c": "M",
+            "\u0442": "t", "\u0422": "T", "\u043b": "l", "\u041b": "L",
+            "“": "\"", "”": "\"", "‘": "'", "’": "'"
         }
         for bad, good in replacements.items():
             text = text.replace(bad, good)
-        # ---------------------------------
-        
-        return jsonify(json.loads(text))
+
+        # Tenta carregar. Se der erro, tenta limpar caracteres de controle invisíveis.
+        try:
+            return jsonify(json.loads(text))
+        except json.JSONDecodeError:
+            import re
+            # Remove caracteres de controle que quebram o JSON (exceto \n \r \t)
+            text_clean = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', text)
+            try:
+                return jsonify(json.loads(text_clean))
+            except:
+                # Retorna erro limpo em vez de quebrar
+                return jsonify({
+                    "action": "chat", 
+                    "message": f"⚠️ A IA gerou uma resposta inválida (Erro JSON). Tente de novo. \n\nRaw: {text[:50]}..."
+                })
     
     except Exception as e:
         return jsonify({"action": "chat", "message": f"Erro API: {str(e)}"})
