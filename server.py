@@ -40,8 +40,12 @@ SEU MODO DE OPERAÇÃO (Analise a intenção e escolha 1 das 3 ações):
 ----------------------------------------------------------------------
 ROBLOX API CHEATSHEET (REGRAS OBRIGATÓRIAS)
 ----------------------------------------------------------------------
-1. MODELOS E POSIÇÃO:
-   - PARA LER: Use `model:GetPivot().Position`. PARA MOVER: `model:PivotTo()`. REDIMENSIONAR: `model:ScaleTo()`.
+1. MODELOS E POSIÇÃO (ERRO CRÍTICO DE TIPO):
+   - 'Model' NÃO tem propriedade .Position. Use `model:GetPivot().Position`.
+   - PARA MOVER (PIVOT): O argumento de :PivotTo() DEVE SER UM CFRAME.
+     - ERRADO: `model:PivotTo(posVector3)` -> Isso causa erro "Unable to cast Vector3 to CoordinateFrame".
+     - CORRETO: `model:PivotTo(CFrame.new(posVector3))` -> Converta sempre!
+   - PARA REDIMENSIONAR: Use `model:ScaleTo(fator)`.
 
 2. COLISÕES & EVENTOS (.Touched):
    - 'Model' NÃO tem .Touched. Aplique na `PrimaryPart` ou itere nas 'BasePart' filhas.
@@ -87,6 +91,7 @@ def agent_step():
     user_api_key = data.get('apiKey')
     user_lang = data.get('language', 'Português')
     user_name = data.get('userName', 'Desenvolvedor')
+    map_context = data.get('mapContext', 'Geral')
     
     if not user_api_key:
         return jsonify({"action": "chat", "message": "⚠️ ERRO: Configure sua API Key!"})
@@ -100,12 +105,20 @@ def agent_step():
             system_instruction=base_system_instruction
         )
  
+        # [CORREÇÃO CRÍTICA DE CONTEXTO]
+        # Injetamos uma regra de prioridade para que o Gênero (Terror) vença os Objetos Visuais (Árvore Fofa)
         full_prompt = (
-            f"IDIOMA: {user_lang}.\n"
-            f"USUÁRIO: {user_name}.\n"
-            f"CONTEXTO DO MAPA: {data.get('map','')}\n"
+            f"IDIOMA DE RESPOSTA: {user_lang}.\n"
+            f"NOME DO USUÁRIO: {user_name}.\n"
+            f"---------------------------------------------------\n"
+            f"CONTEXTO TEMÁTICO DO PROJETO (PRIORIDADE MÁXIMA): {map_context}.\n"
+            f"DIRETRIZ DE CRIATIVIDADE: Todas as suas ideias, nomes e criações DEVEM seguir estritamente o tema '{map_context}'.\n"
+            f"- Se o tema for 'Terror' e você ver 'Árvores Fofas' no mapa, ignore a fofura e trate-as como árvores mortas/assustadoras.\n"
+            f"- O tema '{map_context}' define a atmosfera. Os objetos abaixo são apenas recursos disponíveis.\n"
+            f"---------------------------------------------------\n"
+            f"OBJETOS EXISTENTES NO MAPA 3D: {data.get('map','')}\n"
             f"SELEÇÃO ATUAL: {data.get('selection','')}\n"
-            f"PEDIDO: {data.get('prompt')}"
+            f"PEDIDO DO USUÁRIO: {data.get('prompt')}"
         )
         
         response = model.generate_content(full_prompt)
