@@ -23,10 +23,10 @@ base_system_instruction = (
     "# PERSONA: Voce e um Assistente de Roblox Studio de elite, uma fusao de programador Luau Senior e um talentoso Artista 3D. "
     "Seu objetivo e impressionar o usuario com codigo funcional e modelos visualmente atraentes.\n\n"
     "# MODO DE OPERACAO: Analise o pedido e escolha UMA das 3 acoes.\n\n"
-    '1. ACAO: \"chat\"\n'
+    '1. ACAO: "chat"\n'
     "   - Use para conversas, responder perguntas, ou quando nao for possivel gerar um comando/script funcional.\n"
     "   - [OBRIGATORIO] O campo 'message' DEVE estar no idioma do usuario.\n\n"
-    '2. ACAO: \"propose_command\" (Criacao e Modificacao de Objetos 3D)\n'
+    '2. ACAO: "propose_command" (Criacao e Modificacao de Objetos 3D)\n'
     "   - [OBRIGATORIO] O campo 'message' DEVE estar no idioma do usuario. Ex: 'Criando casa...', 'Pintando de azul...'.\n\n"
     "   ### DIRETRIZES DE ARTE E DESIGN (MUITO IMPORTANTE) ###\n"
     "   - ESTILO: Seus modelos devem ser detalhados e criativos. Pense como um artista. Um 'carro' nao e um bloco, tem chassi, rodas, janelas. Uma 'arvore' tem tronco e folhas de formatos diferentes.\n"
@@ -44,7 +44,7 @@ base_system_instruction = (
     "   - NIL CHECKS: [MUITO CRITICO] SEMPRE verifique se um objeto encontrado (`FindFirstChild`, etc.) nao e `nil` antes de usar suas propriedades.\n"
     "   - PADRAO DE CODIGO: O codigo Luau gerado deve usar nomes de variaveis em ingles e nao pode conter acentos ou caracteres especiais.\n"    
     "   - RETORNO: O codigo DEVE retornar o modelo principal criado (`return model`).\n\n"
-    '3. ACAO: \"propose_script\" (Criacao de Scripts)\n'
+    '3. ACAO: "propose_script" (Criacao de Scripts)\n'
     "   - Use para criar `Script`, `LocalScript`, etc.\n"
     "   - O campo 'message' DEVE estar no idioma do usuario.\n\n"
     "# FORMATO DA SAIDA: Use este JSON OBRIGATORIAMENTE.\n"
@@ -75,7 +75,6 @@ def connect():
 
 @app.route('/generate', methods=['POST'])
 def generate():
-    # Fail fast if the API key was not loaded at startup
     if not GEMINI_API_KEY:
         return jsonify({"error": "Server is not configured with a GEMINI_API_KEY."} ), 500
         
@@ -90,11 +89,11 @@ try:
         map_context = data.get('map_context', 'Sem contexto de mapa.')
         
         prompt = (
-            f"DADOS DO USUARIO:\\n"
-            f"- IDIOMA: {user_lang}\\n"
-            f"- SELECAO ATUAL: {selection}\\n"
-            f"- CONTEXTO DO MAPA: {map_context}\\n"
-            f"-------------------------------------\\n"
+            f"DADOS DO USUARIO:\n"
+            f"- IDIOMA: {user_lang}\n"
+            f"- SELECAO ATUAL: {selection}\n"
+            f"- CONTEXTO DO MAPA: {map_context}\n"
+            f"-------------------------------------\n"
             f"PEDIDO DO USUARIO: \"{user_prompt}\"\n"
         )
         
