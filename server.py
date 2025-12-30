@@ -5,73 +5,57 @@ import json
 
 app = Flask(__name__)
 
-# SYSTEM INSTRUCTION V3 (ESTÉTICA PRO + POSICIONAMENTO + PRIMARYPART)
+# SYSTEM INSTRUCTION V4 (MSG DINÂMICA + SANITIZER EXPANDIDO)
 base_system_instruction = """
 Você é um Gemini Copilot para Roblox Studio (Especialista Sênior em Luau e Builder Profissional).
 
 SEU MODO DE OPERAÇÃO (Analise a intenção e escolha 1 das 3 ações):
 
 1. AÇÃO: "chat"
-   - QUANDO USAR: Conversas, dúvidas teóricas, "Olá", brainstorm.
-   - O QUE FAZER: Responda cordialmente. Use tags <b>texto</b> para negrito.
-   - SAÍDA: { "action": "chat", "message": "..." }
+   - Respostas teóricas ou conversas.
 
 2. AÇÃO: "propose_command" (CONSTRUÇÃO E ALTERAÇÃO)
-   - QUANDO USAR: 
-     a) Alterações (Mover, Pintar, Deletar, Redimensionar).
-     b) CRIAÇÃO de objetos estáticos (Ex: "Crie uma árvore", "Gere uma parede", "Crie um helicóptero").
+   - QUANDO USAR: Criar modelos, mover, pintar, deletar.
    
    - REGRA DE POSICIONAMENTO INTELIGENTE (CRÍTICA):
-     - SE O USUÁRIO FORNECEU UMA SELEÇÃO (verifique o campo 'SELEÇÃO ATUAL'):
+     - SE O USUÁRIO FORNECEU UMA SELEÇÃO (verifique 'SELEÇÃO ATUAL'):
        - O novo objeto DEVE ser criado na posição dessa seleção.
-       - USE: `local cf = target:GetPivot()` e posicione o novo com `model:PivotTo(cf * CFrame.new(0, 5, 0))` (ex: 5 studs acima).
+       - SE A SELEÇÃO FOR UMA 'FOLDER' OU 'TOOL': Use a origem (0, 10, 0), pois elas não têm GetPivot().
+       - CASO CONTRÁRIO: `local cf = target:GetPivot(); model:PivotTo(cf * CFrame.new(0, 5, 0))`
      - SE NÃO HOUVER SELEÇÃO:
-       - Crie próximo à origem (0, 10, 0) ou onde o usuário pediu explicitamente.
+       - Crie próximo à origem (0, 10, 0).
+
+   - REGRA DE MENSAGEM DE RETORNO (FEEDBACK):
+     - Se criou usando uma seleção como referência, a mensagem DEVE ser: "Criando [Objeto] próximo a <b>[Nome da Seleção]</b>...".
+     - Se criou na origem (sem seleção), a mensagem é: "Criando [Objeto] na origem...".
 
    - REGRA DE ESTÉTICA & DESIGN (BUILDER PRO):
-     - PROIBIDO CRIAR "BLOCOS CINZAS". Se o usuário pedir uma árvore, não faça apenas cubos verdes e marrons lisos.
-     - USE MATERIAIS: `Enum.Material.Wood`, `Enum.Material.Neon`, `Enum.Material.Grass`, `Enum.Material.Metal`.
-     - USE VARIAÇÃO: Mude levemente o tamanho/rotação de partes naturais para dar realismo.
-     - USE DETALHES: Crie modelos (Models) compostos por várias Parts.
+     - PROIBIDO CRIAR "BLOCOS CINZAS". Use `Enum.Material` (Wood, Neon, Grass, Metal) e `Color3`.
+     - DETALHES: Crie modelos (Models) compostos por várias Parts.
 
    - REGRA TÉCNICA (OBRIGATÓRIA):
      - Use `Instance.new("Part")` e `Instance.new("Model")`. Agrupe no Model.
      - [CRÍTICO] `model.PrimaryPart = partPrincipal` (Defina ANTES de mover).
-     - Posicione 'Parent = workspace'.
-     - POSICIONAMENTO RELATIVO: Use `target:GetPivot().Position` (Nunca `target.Position` direto em Models).
-     - RETORNE O OBJETO: Termine com `return variable_name` (Ex: `return model`).
+     - Retorne o objeto no final: `return variable_name`.
    
-   - SAÍDA: { "action": "propose_command", "message": "Construindo [Objeto] detalhado...", "code": "..." }
+   - SAÍDA: { "action": "propose_command", "message": "Criando Árvore próximo a <b>SpawnLocation</b>...", "code": "..." }
 
-3. AÇÃO: "propose_script" (LÓGICA, JOGO E INTERATIVIDADE)
-   - QUANDO USAR: Comportamentos ("Ao tocar...", "Matar player", "Porta abrir", "Ciclo Dia/Noite").
-   - O QUE FAZER: 
-     - RETORNE APENAS o código fonte da lógica (o conteúdo do script).
-     - REGRA DE OURO (MODELS): Use loops 'for _, v in ipairs(script.Parent:GetDescendants())' para conectar eventos em todas as partes de um modelo.
-   - SAÍDA: { "action": "propose_script", "message": "Criando script de lógica...", "code": "..." }
+3. AÇÃO: "propose_script" (LÓGICA)
+   - Retorne apenas o código do script.
 
 ----------------------------------------------------------------------
-ROBLOX API CHEATSHEET (REGRAS OBRIGATÓRIAS)
+ROBLOX API CHEATSHEET
 ----------------------------------------------------------------------
-1. CORES: Use `Color3.fromRGB(R, G, B)`. Cores vibrantes!
-2. MODELOS E POSIÇÃO:
-   - 'Model' NÃO tem propriedade .Position. Use `model:GetPivot().Position`.
-   - ERRO COMUM: Tentar mover Model sem PrimaryPart. SEMPRE defina `model.PrimaryPart`.
-   - PARA MOVER (PIVOT): O argumento de :PivotTo() DEVE SER UM CFRAME.
-     - CORRETO: `model:PivotTo(CFrame.new(posVector3))` -> Converta sempre!
-   - PARA REDIMENSIONAR: Use `model:ScaleTo(fator)`.
-3. LIXEIRA ORGANIZADA:
-   - Mova para: `game:GetService("ServerStorage").Gemini_Trash`.
-4. SANITIZAÇÃO:
-   - Não use acentos ou caracteres especiais em nomes de variáveis Lua.
-5. FORMATAÇÃO:
-   - Use tags HTML <b>negrito</b>.
+1. CORES: Use `Color3.fromRGB(R, G, B)`.
+2. MODELOS: `model:PivotTo(CFrame)` exige `PrimaryPart`.
+3. ERROS COMUNS: Não use caracteres especiais em Enums (ex: `Enum.Material.Wood`, nunca traduza o Enum).
+4. SANITIZAÇÃO: Não use acentos ou caracteres russos em nomes de variáveis.
 ----------------------------------------------------------------------
 
 SAÍDA JSON OBRIGATÓRIA:
 { 
   "action": "chat" | "propose_command" | "propose_script", 
-  "message": "Texto descritivo com nome do objeto (Use <b>nome</b> para destaque)", 
+  "message": "Texto descritivo (Siga a regra de mensagem)", 
   "code": "Código Lua (vazio se for chat)" 
 }
 """
@@ -87,10 +71,10 @@ def agent_step():
     user_lang = data.get('language', 'Português')
     user_name = data.get('userName', 'Desenvolvedor')
     
-    # Contextos e Seleção
+    # Contextos
     map_context = data.get('mapContext', 'Geral')
     use_context_for_models = data.get('useContextForModels', False)
-    selection_info = data.get('selection', '') # Importante para posicionamento
+    selection_info = data.get('selection', '') 
     
     if not user_api_key:
         return jsonify({"action": "chat", "message": "⚠️ ERRO: Configure sua API Key!"})
@@ -104,40 +88,31 @@ def agent_step():
             system_instruction=base_system_instruction
         )
  
-        # LÓGICA DO INTERRUPTOR (TOGGLE)
         style_instruction = ""
         if use_context_for_models:
              style_instruction = (
-                f"INSTRUÇÃO DE ESTILO VISUAL (ATIVADA): O contexto do jogo é '{map_context}'. "
-                f"Ao criar modelos 3D ou alterar cores, VOCÊ DEVE aplicar uma estética que combine com '{map_context}' (ex: cores, materiais). "
-                f"Se for Terror, faça algo sombrio. Se for Sci-Fi, use neon/metal."
+                f"ESTILO VISUAL: O contexto é '{map_context}'. Use materiais/cores coerentes."
              )
         else:
              style_instruction = (
-                f"INSTRUÇÃO DE ESTILO VISUAL (DESATIVADA): O contexto é '{map_context}', MAS O USUÁRIO DESATIVOU ISSO PARA MODELOS. "
-                f"Ao criar objetos 3D, crie a versão PADRÃO/GENÉRICA deles mas visualmente agradável."
-                f"Ignore o tema '{map_context}' para a aparência visual. Faça limpo e simples."
+                f"ESTILO VISUAL: Padrão Roblox, mas bonito e detalhado."
              )
 
         full_prompt = (
-            f"IDIOMA DE RESPOSTA: {user_lang}.\n"
-            f"NOME DO USUÁRIO: {user_name}.\n"
-            f"CONTEXTO TEMÁTICO GERAL: {map_context}.\n"
+            f"USUÁRIO: {user_name} ({user_lang})\n"
             f"{style_instruction}\n"
-            f"---------------------------------------------------\n"
-            f"SELEÇÃO ATUAL (ALVO PRINCIPAL PARA POSICIONAMENTO): {selection_info}\n"
-            f"OBJETOS EXISTENTES NO MAPA 3D: {data.get('map','')}\n"
-            f"PEDIDO DO USUÁRIO: {data.get('prompt')}\n"
+            f"SELEÇÃO ATUAL: {selection_info}\n"
+            f"PEDIDO: {data.get('prompt')}\n"
             f"-----\n"
-            f"NOTA: Se houver 'SELEÇÃO ATUAL', crie o objeto EM CIMA ou AO LADO dela."
+            f"IMPORTANTE: Verifique se existe SELEÇÃO ATUAL para definir a posição e a mensagem de feedback."
         )
         
         response = model.generate_content(full_prompt)
         text = response.text.replace("```json", "").replace("```", "").strip()
 
-        # --- SANITIZER AVANÇADO (CORREÇÃO DE ERROS DE SINTAXE) ---
+        # --- SANITIZER SUPER REFORÇADO ---
         replacements = {
-            # Cirílicos enganosos que quebram Lua
+            # Cirílicos comuns e o 'v' (U+0432) que deu erro
             "\u0430": "a", "\u0410": "A", 
             "\u0435": "e", "\u0415": "E", 
             "\u043e": "o", "\u041e": "O", 
@@ -147,13 +122,16 @@ def agent_step():
             "\u0445": "x", "\u0425": "X", 
             "\u043a": "k", "\u041a": "K", 
             "\u0456": "i", "\u0406": "I",
-            # Aspas inteligentes (Smart Quotes) que quebram strings Lua
+            "\u0432": "v", "\u0412": "V", # <--- O CULPADO DO SEU ERRO
+            "\u043d": "n", "\u041d": "N",
+            "\u043c": "m", "\u041c": "M",
+            # Aspas inteligentes
             "“": "\"", "”": "\"", 
             "‘": "'", "’": "'"
         }
         for bad, good in replacements.items():
             text = text.replace(bad, good)
-        # ---------------------------------------------------------
+        # ---------------------------------
         
         return jsonify(json.loads(text))
     
