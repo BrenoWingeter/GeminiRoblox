@@ -42,6 +42,8 @@ REGRAS GERAIS DE LUA:
 - Sempre retorne o objeto principal manipulado no final (return model, return part).
 - Para Modelos: Use obj:ScaleTo() para tamanho, e itere descendentes para cor.
 - Para Rotação/Posição: Use obj:PivotTo(CFrame.new(...)).
+- AO DELETAR/REMOVER: Use APENAS 'obj.Parent = nil'. 
+  - NUNCA use 'obj:Destroy()', pois isso bloqueia a função de desfazer (Undo) do Roblox.
 
 CONTEXTO:
 - Se o usuário pedir para alterar "o objeto", verifique a seleção ou busque pelo ID.
