@@ -1,11 +1,23 @@
-# Atualizacao forcada para o Render
-import os
-from flask import Flask, request, jsonify
 import google.generativeai as genai
+import google.generativeai.types as genai_types
+from flask import Flask, request, jsonify
 import json
-import re
+import os
 
-app = Flask(__name__)
+# Set up the model
+generation_config = {
+  "temperature": 0.9,
+  "top_p": 1,
+  "top_k": 1,
+  "max_output_tokens": 2048,
+}
+
+safety_settings = [
+  {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+  {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+  {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+  {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+]
 
 base_system_instruction = (
     "# PERSONA: Voce e um Assistente de Roblox Studio de elite, uma fusao de programador Luau Senior e um talentoso Artista 3D. "
@@ -18,6 +30,7 @@ base_system_instruction = (
     "   - [OBRIGATORIO] O campo 'message' DEVE estar no idioma do usuario. Ex: 'Criando casa...', 'Pintando de azul...'.\n\n"
     "   ### DIRETRIZES DE ARTE E DESIGN (MUITO IMPORTANTE) ###\n"
     "   - ESTILO: Seus modelos devem ser detalhados e criativos. Pense como um artista. Um 'carro' nao e um bloco, tem chassi, rodas, janelas. Uma 'arvore' tem tronco e folhas de formatos diferentes.\n"
+    "   - SEJA CONCISO: E absolutamente CRITICO que seu codigo nao seja excessivamente longo, ou a resposta sera cortada e causara um erro. Prefira tecnicas que usam menos linhas de codigo. Modele de forma eficiente.\n"
     "   - COMPLEXIDADE vs. CONCLUSAO: Para pedidos muito complexos (ex: 'cavalo'), crie uma versao 'low-poly' ou estilizada. E **melhor um modelo simples e completo** do que um modelo super detalhado cujo codigo e cortado pela metade. PRIORIZE SEMPRE GERAR UM CODIGO FUNCIONAL E COMPLETO.\n"
     "   - MATERIAIS E CORES: Use `Enum.Material` e `Color3.fromRGB` de forma inteligente para dar vida aos objetos.\n\n"
     "   ### DIRETRIZES TECNICAS ###\n"
@@ -42,75 +55,29 @@ base_system_instruction = (
     '}'
 )
 
+try:
+    gemini_api_key = os.environ.get("GEMINI_API_KEY")
+    if not gemini_api_key:
+        raise ValueError("GEMINI_API_KEY not found in environment variables")
+    genai.configure(api_key=gemini_api_key)
+except ValueError as e:
+    print(f"Error initializing Gemini: {e}")
+    exit()
 
-@app.route('/connect', methods=['POST'])
-def connect_project():
-    return jsonify({"status": "OK"})
+model = genai.GenerativeModel(model_name="gemini-1.0-pro",
+                              generation_config=generation_config,
+                              system_instruction=base_system_instruction,
+                              safety_settings=safety_settings)
 
-@app.route('/agent', methods=['POST'])
-def agent_step():
-    data = request.json
-    user_api_key = data.get('apiKey')
-    user_lang = data.get('language', 'Português')
-    user_name = data.get('userName', 'Desenvolvedor')
-    
-    # Seus contextos
-    map_context = data.get('mapContext', 'Geral')
-    use_context_for_models = data.get('useContextForModels', False)
-    selection_info = data.get('selection', '') 
+app = Flask(__name__)
 
-    if not user_api_key:
-        return jsonify({"action": "chat", "message": "⚠️ ERRO: Configure sua API Key!"})
+@app.route('/connect', methods=['GET'])
+def connect():
+    return jsonify({"status": "connected"})
 
+@app.route('/generate', methods=['POST'])
+def generate():
     try:
-        genai.configure(api_key=user_api_key)
-        
-        model = genai.GenerativeModel(
-            model_name="models/gemini-2.0-flash-exp", 
-            generation_config={"response_mime_type": "application/json"}, 
-            system_instruction=base_system_instruction 
-        )
- 
-        style_instruction = "ESTILO: Padrão Roblox detalhado."
-        if use_context_for_models:
-             style_instruction = f"ESTILO VISUAL: O contexto é '{map_context}'. Use materiais coerentes."
-
-        full_prompt = (
-            f"INSTRUÇÃO CRÍTICA: Responda estritamente no idioma '{user_lang}'. Dirija-se ao usuário como '{user_name}'.\n"
-            f"-----\n"
-            f"{style_instruction}\n"
-            f"CONTEXTO DO JOGO: {map_context}\n"
-            f"SELEÇÃO ATUAL (OBJETO QUE O USUÁRIO CLICOU): {selection_info}\n"
-            f"-----\n"
-            f"PEDIDO DE '{user_name.upper()}': {data.get('prompt')}\n"
-            f"-----\n"
-            f"REGRAS DE CÓDIGO: O código Luau gerado NÃO PODE conter caracteres cirílicos, acentos ou quaisquer caracteres não-ASCII. Use apenas nomes de variáveis e strings em inglês puro."
-        )
-        
-        response = model.generate_content(full_prompt)
-        text = response.text.replace("```json", "").replace("```", "").strip()
-
-        # Tenta decodificar o JSON e, se falhar, tenta limpar caracteres de controle
-        response_data = None
-        try:
-            response_data = json.loads(text)
-        except json.JSONDecodeError:
-            cleaned_text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', text)
-            try:
-                response_data = json.loads(cleaned_text)
-            except Exception:
-                 return jsonify({"action": "chat", "message": f"⚠️ A IA gerou uma resposta inválida (JSON Error). Tente de novo. \n\nRaw: {text[:80]}..."})
-
-        # Sanitiza o campo 'code' para remover quaisquer caracteres não-ASCII que restaram
-        if response_data and "code" in response_data and isinstance(response_data["code"], str):
-            # Garante que o código seja puramente ASCII para evitar erros no Luau
-            response_data["code"] = response_data["code"].encode('ascii', 'ignore').decode('utf-8')
-
-        return jsonify(response_data)
-    
-    except Exception as e:
-        return jsonify({"action": "chat", "message": f"Erro API: {str(e)}"})
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+        data = request.get_json()
+        if not data or 'prompt' not in data:
+            return jsonify({"error": "Invalid request. 'prompt' is required."
